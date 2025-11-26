@@ -2,16 +2,19 @@
 #include "ssd1306.h"
 #include "hx711.h"
 
-HX711 lfScale(D6,D3);
+HX711 scales[] = {{D6,D3}};
 SSD1306 oled(0x3C, 128, 64);
 std::string FormatWeight(float weight,int size);
 void UpdateWeights();
-float lfWeight, rfWeight,lrWeight, rrWeight;
+float lfWeight, rfWeight,lrWeight, rrWeight, totalWeight, crossWeight;
+float lfPercent, rfPercent, lrPercent, rrPercent;
 float offset = 4180;
+float weights[] = {0,0,0,0};
+float percents[] = {0,0,0,0};
 float scaleFactor = offset / 178 * 453.5924;
 
 void setup() {
-  Wire.begin(); // SDA, SCL for ESP32
+  Wire.begin(D4,D5); // SDA, SCL for ESP32
   oled.begin();
  
   
@@ -20,9 +23,13 @@ void setup() {
   Serial.begin(115200);
   delay(2000);
   Serial.println("Scanning...");
-  lfScale.begin();
-  lfScale.tare();
-  lfScale.setScale(scaleFactor);
+
+  for(int i = 0; i<(sizeof(scales)/sizeof(scales[0])); i++){
+    scales[i].begin();
+    scales[i].tare();
+    scales[i].setScale(scaleFactor);
+  }
+  
   
 
     
@@ -31,29 +38,36 @@ void setup() {
 
 void UpdateWeights(){
   oled.clear();
-  long r = lfScale.readRaw();
-
+  totalWeight = 0;
+  for(int i = 0; i < (sizeof(scales)/sizeof(scales[0])); i++){
+  
+  long r = scales[i].readRaw();
     if (r == LONG_MIN) {
         Serial.println("Read failed (HX711 not ready)");
+        weights[i] = 0;
     } else {
         float net = r - offset;
         float lbs = net / scaleFactor;
-        
-
-        lfWeight = lfScale.getWeight();
+        weights[i] = scales[i].getWeight(5);
+        totalWeight += weights[i];
     }
+  }
     
+  crossWeight = (weights[0] + weights[3]) / totalWeight * 100;  
   
-  float lfPercent, rfPercent, lrPercent, rrPercent = 0;
-  oled.drawString(0,0,(FormatWeight(lfWeight,16) + "lbs").c_str()); 
-  oled.drawString(0,12,(FormatWeight(lfPercent,8) + "%").c_str()); 
-  oled.drawString(80,0,(FormatWeight(rfWeight,16) + "lbs").c_str());
-  oled.drawString(80,12,(FormatWeight(rfPercent,8) + "%").c_str()); 
-  oled.drawString(0,44,(FormatWeight(lrWeight,16) + "lbs").c_str()); 
-  oled.drawString(0,56,(FormatWeight(lrPercent,8) + "%").c_str()); 
-  oled.drawString(80,44,(FormatWeight(rrWeight,16) + "lbs").c_str());
-  oled.drawString(80,56,(FormatWeight(rrPercent,8) + "%").c_str());
-  oled.drawString(37,28,(FormatWeight(325,8) + "lbs").c_str()); 
+  for(int i = 0; i < (sizeof(weights)/sizeof(weights[0])); i++){
+    percents[i] = weights[i] / totalWeight;
+  }
+  oled.drawString(0,0,(FormatWeight(weights[0],16) + "lbs").c_str()); 
+  oled.drawString(0,11,(FormatWeight(percents[0],8) + "%").c_str()); 
+  oled.drawString(80,0,(FormatWeight(weights[1],16) + "lbs").c_str());
+  oled.drawString(80,11,(FormatWeight(percents[1],8) + "%").c_str()); 
+  oled.drawString(0,47,(FormatWeight(weights[2],16) + "lbs").c_str()); 
+  oled.drawString(0,56,(FormatWeight(percents[2],8) + "%").c_str()); 
+  oled.drawString(80,47,(FormatWeight(weights[3],16) + "lbs").c_str());
+  oled.drawString(80,56,(FormatWeight(percents[3],8) + "%").c_str());
+  oled.drawString(37,26,(FormatWeight(totalWeight,8) + "lbs").c_str());
+  oled.drawString(37, 37,(FormatWeight(crossWeight,8) + "%").c_str()); 
   oled.display();
 }
 
