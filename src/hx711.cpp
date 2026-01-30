@@ -14,7 +14,13 @@ bool HX711::isReady() {
 }
 
 long HX711::readRaw() {
-    while (!isReady());  // wait until HX711 pulls DOUT low
+    const uint32_t start = millis();
+    while (!isReady()) {  // wait until HX711 pulls DOUT low
+        if (millis() - start >= 100) {
+            return _hasLast ? _lastRaw : 0;
+        }
+        delay(1);
+    }
 
     long value = 0;
 
@@ -41,6 +47,8 @@ long HX711::readRaw() {
     if (value & 0x800000)
         value |= 0xFF000000;
 
+    _lastRaw = value;
+    _hasLast = true;
     return value;
 }
 

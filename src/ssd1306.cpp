@@ -110,7 +110,6 @@ SSD1306::SSD1306(uint8_t address, uint8_t w, uint8_t h)
 }
 
 void SSD1306::begin() {
-    Wire.begin();
     clear();
 
     const uint8_t init[] = {
