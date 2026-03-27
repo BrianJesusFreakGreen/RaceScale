@@ -24,6 +24,8 @@ uint32_t seq = 0;
 String FormatWeight(float weight,int size);
 void UpdateWeights();
 float weights[] = {0,0,0,0};
+float rawWeights[] = {0,0,0,0};
+float zeroOffsets[] = {0,0,0,0};
 float percents[] = {0,0,0,0};
 float totalWeight, crossWeight;
 float calOffset = 4180;
@@ -260,9 +262,9 @@ static void handleData() {
   server.send(200, "application/json", jsonPayload);
 }
 
-static void tareScale(uint8_t index) {
+static void zeroScale(uint8_t index) {
   if (index < (sizeof(scales) / sizeof(scales[0]))) {
-    scales[index].tare();
+    zeroOffsets[index] = rawWeights[index];
   }
 }
 
@@ -272,16 +274,16 @@ static void handleTare() {
 
   if (target == "all") {
     for (uint8_t i = 0; i < (sizeof(scales) / sizeof(scales[0])); i++) {
-      tareScale(i);
+      zeroScale(i);
     }
   } else if (target == "front") {
-    tareScale(0);
-    tareScale(1);
+    zeroScale(0);
+    zeroScale(1);
   } else if (target == "rear") {
-    tareScale(2);
-    tareScale(3);
+    zeroScale(2);
+    zeroScale(3);
   } else if (target.length() == 1 && isDigit(target[0])) {
-    tareScale(target.toInt());
+    zeroScale(target.toInt());
   } else {
     handled = false;
   }
@@ -328,7 +330,8 @@ void UpdateWeights(){
   oled.clear();
   totalWeight = 0;
   for(int i = 0; i < (sizeof(scales)/sizeof(scales[0])); i++){
-        weights[i] = scales[i].getWeight(4);
+        rawWeights[i] = scales[i].getWeight(4);
+        weights[i] = rawWeights[i] - zeroOffsets[i];
         totalWeight += weights[i];
    
   }
