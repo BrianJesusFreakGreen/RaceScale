@@ -113,6 +113,11 @@ static const char INDEX_HTML[] PROGMEM = R"HTML(
     .sub{opacity:.7;font-size:14px}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:560px}
     .card{border:1px solid #ddd;border-radius:16px;padding:12px}
+    .controls{max-width:560px;margin-top:10px}
+    .btnRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    button{border:1px solid #999;background:#fff;border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer}
+    button:hover{background:#f6f6f6}
+    button:disabled{opacity:.5;cursor:wait}
     .row{display:flex;justify-content:space-between;gap:10px}
     .big{font-size:30px;font-weight:750;letter-spacing:.2px}
     .pct{opacity:.7}
@@ -149,6 +154,21 @@ static const char INDEX_HTML[] PROGMEM = R"HTML(
     <div class="sub">Seq: <span id="seq">--</span> · Age: <span id="age">--</span> ms</div>
   </div>
 
+  <div class="card controls">
+    <div class="row"><div>Zero / Tare</div></div>
+    <div class="btnRow">
+      <button data-zero="0">Zero LF (0)</button>
+      <button data-zero="1">Zero RF (1)</button>
+      <button data-zero="2">Zero LR (2)</button>
+      <button data-zero="3">Zero RR (3)</button>
+    </div>
+    <div class="btnRow">
+      <button data-zero="front">Zero Front (0,1)</button>
+      <button data-zero="rear">Zero Rear (2,3)</button>
+      <button data-zero="all">Zero All</button>
+    </div>
+  </div>
+
 <script>
   const els = {
     status: document.getElementById('status'),
@@ -164,6 +184,7 @@ static const char INDEX_HTML[] PROGMEM = R"HTML(
     lrPct: document.getElementById('lrPct'),
     rrPct: document.getElementById('rrPct')
   };
+  const zeroButtons = Array.from(document.querySelectorAll('button[data-zero]'));
 
   let lastOk = performance.now();
 
@@ -187,6 +208,24 @@ static const char INDEX_HTML[] PROGMEM = R"HTML(
     // We don't have ESP epoch time here; just show how long since last successful fetch
     els.age.textContent = Math.round(performance.now() - lastOk);
   }
+
+  async function doZero(target){
+    zeroButtons.forEach((b)=> b.disabled = true);
+    try{
+      const r = await fetch('/tare?target=' + encodeURIComponent(target), { method:'POST' });
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      els.status.textContent = "Zeroed " + target;
+      tick();
+    }catch(e){
+      els.status.textContent = "Zero failed (" + target + ")";
+    }finally{
+      zeroButtons.forEach((b)=> b.disabled = false);
+    }
+  }
+
+  zeroButtons.forEach((btn)=>{
+    btn.addEventListener('click', ()=> doZero(btn.dataset.zero));
+  });
 
   async function tick(){
     try{
@@ -221,9 +260,44 @@ static void handleData() {
   server.send(200, "application/json", jsonPayload);
 }
 
+static void tareScale(uint8_t index) {
+  if (index < (sizeof(scales) / sizeof(scales[0]))) {
+    scales[index].tare();
+  }
+}
+
+static void handleTare() {
+  String target = server.arg("target");
+  bool handled = true;
+
+  if (target == "all") {
+    for (uint8_t i = 0; i < (sizeof(scales) / sizeof(scales[0])); i++) {
+      tareScale(i);
+    }
+  } else if (target == "front") {
+    tareScale(0);
+    tareScale(1);
+  } else if (target == "rear") {
+    tareScale(2);
+    tareScale(3);
+  } else if (target.length() == 1 && isDigit(target[0])) {
+    tareScale(target.toInt());
+  } else {
+    handled = false;
+  }
+
+  if (!handled) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid target\"}");
+    return;
+  }
+
+  server.send(200, "application/json", "{\"ok\":true}");
+}
+
 static void setupRoutes() {
   server.on("/", handleRoot);
   server.on("/data", handleData);
+  server.on("/tare", HTTP_POST, handleTare);
   server.begin();
   Serial.println("[Web] Server started on port 80.");
 }
