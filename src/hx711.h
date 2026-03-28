@@ -15,6 +15,7 @@ public:
     float getScale() const { return _scale; }
 
 private:
+    long readRawNoWait();
     uint8_t _dout, _sck;
     long _offset = 0;
     float _scale = 1.0;

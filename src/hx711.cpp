@@ -13,15 +13,7 @@ bool HX711::isReady() {
     return digitalRead(_dout) == LOW;
 }
 
-long HX711::readRaw() {
-    const uint32_t start = millis();
-    while (!isReady()) {  // wait until HX711 pulls DOUT low
-        if (millis() - start >= 100) {
-            return _hasLast ? _lastRaw : 0;
-        }
-        delay(1);
-    }
-
+long HX711::readRawNoWait() {
     long value = 0;
 
     // 24-bit reading
@@ -50,6 +42,18 @@ long HX711::readRaw() {
     _lastRaw = value;
     _hasLast = true;
     return value;
+}
+
+long HX711::readRaw() {
+    const uint32_t start = millis();
+    while (!isReady()) {
+        if (millis() - start >= 10) {
+            return _hasLast ? _lastRaw : 0;
+        }
+        delay(1);
+    }
+
+    return readRawNoWait();
 }
 
 void HX711::tare(uint16_t samples) {
